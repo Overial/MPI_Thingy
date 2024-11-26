@@ -27,13 +27,17 @@ void FillMatrix(int**& InMatrix, int InRowCount, int InColCount)
 
 void PrintMatrix(int** InMatrix, int InRowCount, int InColCount)
 {
+	cout << endl;
 	for (int i = 0; i < InRowCount; ++i)
 	{
 		for (int j = 0; j < InColCount; ++j)
 		{
-			printf("Elem[%d][%d] = %d\n", i, j, InMatrix[i][j]);
+			// printf("Elem[%d][%d] = %d", i, j, InMatrix[i][j]);
+			cout << "|" << InMatrix[i][j];
 		}
+		cout << "|" << endl;
 	}
+	cout << endl;
 }
 
 void DeleteMatrix(int**& InMatrix, int InRowCount)
@@ -44,6 +48,11 @@ void DeleteMatrix(int**& InMatrix, int InRowCount)
 	}
 
 	delete[] InMatrix;
+}
+
+void Solve(int**& InMatrix1, int**& InMatrix2, int InRowCount, int ColCount, int InRank)
+{
+	
 }
 
 int main()
@@ -59,13 +68,21 @@ int main()
 
 		printf("Rank: %d Size: %d\n", Rank, Size);
 
-		int RowCount = 3;
-		int ColCount = 4;
+		int RowCount = 2;
+		int ColCount = 2;
 
-		int** Matrix = InitMatrix(RowCount, ColCount);
-		FillMatrix(Matrix, RowCount, ColCount);
-		PrintMatrix(Matrix, RowCount, ColCount);
-		DeleteMatrix(Matrix, RowCount);
+		int** Matrix1 = InitMatrix(RowCount, ColCount);
+		FillMatrix(Matrix1, RowCount, ColCount);
+		PrintMatrix(Matrix1, RowCount, ColCount);
+
+		int** Matrix2 = InitMatrix(RowCount, ColCount);
+		FillMatrix(Matrix2, RowCount, ColCount);
+		PrintMatrix(Matrix2, RowCount, ColCount);
+
+		Solve(Matrix1, Matrix2, RowCount, ColCount, Rank);
+
+		DeleteMatrix(Matrix1, RowCount);
+		DeleteMatrix(Matrix2, RowCount);
 
 		MPI_Finalize();
 	}
