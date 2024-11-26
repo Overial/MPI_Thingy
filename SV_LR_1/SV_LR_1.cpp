@@ -172,6 +172,7 @@ int main()
 
 		DeleteMatrix(Matrix1, RowCount1);
 		DeleteMatrix(Matrix2, RowCount2);
+		DeleteMatrix(Result, RowCount1);
 
 		MPI_Finalize();
 	}
