@@ -1,79 +1,90 @@
+// IDM-23-04
+// Afanasyev Vadim
+// LR№1
+
 #include <iostream>
+#include <iomanip>
 #include "mpi.h"
 
 using namespace std;
 
-int**& InitMatrix(int InRowCount, int InColCount)
+#define TAG_SEND 0
+#define TAG_RECEIVE 1
+
+#define N1 3
+#define M1 4
+#define N2 4
+#define M2 3
+
+int Matrix1[N1][M1];
+int Matrix2[N2][M2];
+int Result[N1][M2];
+
+static void FillMatrices()
 {
-	int** Matrix = new int* [InRowCount];
-	for (int i = 0; i < InRowCount; ++i)
+	for (int i = 0; i < N1; ++i)
 	{
-		Matrix[i] = new int[InColCount];
+		for (int j = 0; j < M1; ++j)
+		{
+			Matrix1[i][j] = rand() % 10;
+		}
 	}
 
-	return Matrix;
-}
-
-void FillMatrix(int**& InMatrix, int InRowCount, int InColCount)
-{
-	for (int i = 0; i < InRowCount; ++i)
+	for (int i = 0; i < N2; ++i)
 	{
-		for (int j = 0; j < InColCount; ++j)
+		for (int j = 0; j < M2; ++j)
 		{
-			InMatrix[i][j] = rand() % 10;
+			Matrix2[i][j] = rand() % 10;
 		}
 	}
 }
 
-void PrintMatrix(int** InMatrix, int InRowCount, int InColCount)
+static void PrintMatrices()
 {
-	cout << endl;
-	for (int i = 0; i < InRowCount; ++i)
+	cout << "Matrix 1:" << endl;
+	for (int i = 0; i < N1; ++i)
 	{
-		for (int j = 0; j < InColCount; ++j)
+		for (int j = 0; j < M1; ++j)
 		{
-			// printf("Elem[%d][%d] = %d", i, j, InMatrix[i][j]);
-			cout << "| " << InMatrix[i][j] << " ";
+			cout << setw(4) << Matrix1[i][j] << "|";
 		}
-		cout << "|" << endl;
+		cout << endl;
 	}
-	cout << endl;
+
+	cout << "Matrix 2:" << endl;
+	for (int i = 0; i < N2; ++i)
+	{
+		for (int j = 0; j < M2; ++j)
+		{
+			cout << setw(4) << Matrix2[i][j] << "|";
+		}
+		cout << endl;
+	}
+
+	cout << "Multiplication result:" << endl;
+	for (int i = 0; i < N1; ++i)
+	{
+		for (int j = 0; j < M2; ++j)
+		{
+			cout << setw(4) << Result[i][j] << "|";
+		}
+		cout << endl;
+	}
 }
 
-void DeleteMatrix(int**& InMatrix, int InRowCount)
+static void SingleProcessMult()
 {
-	for (int i = 0; i < InRowCount; ++i)
+	cout << "Processing:" << endl;
+	for (int i = 0; i < N1; ++i)
 	{
-		delete[] InMatrix[i];
-	}
-
-	delete[] InMatrix;
-}
-
-int** Solve(int**& InMatrix1, int**& InMatrix2, int InRowCount1, int InColCount1, int InRowCount2, int InColCount2)
-{
-	int** Result = new int* [InRowCount1];
-	for (int i = 0; i < InRowCount1; ++i)
-	{
-		Result[i] = new int[InColCount2];
-	}
-
-	Result[0][0] = 1;
-	Result[0][1] = 2;
-	Result[1][0] = 3;
-	Result[1][1] = 4;
-
-	cout << "Processing:" << endl << endl;
-	for (int i = 0; i < InRowCount1; ++i)
-	{
-		for (int j = 0; j < InColCount2; ++j)
+		for (int j = 0; j < M2; ++j)
 		{
 			cout << "| ";
 			int CurrentCol2 = 0;
-			for (int j1 = 0; j1 < InColCount1; ++j1)
+			for (int j1 = 0; j1 < N1; ++j1)
 			{
-				cout << InMatrix1[i][j1] << "*" << InMatrix2[CurrentCol2][j];
-				if (j1 != InColCount1 - 1)
+				cout << Matrix1[i][j1] << "*" << Matrix2[CurrentCol2][j];
+				if (j1 != M1 - 1)
 				{
 					cout << " + ";
 				}
@@ -90,12 +101,10 @@ int** Solve(int**& InMatrix1, int**& InMatrix2, int InRowCount1, int InColCount1
 	cout << endl;
 
 	cout << "Calculating cells:" << endl << endl;
-	for (int i = 0; i < InRowCount1; ++i)
+	/*for (int i = 0; i < InRowCount1; ++i)
 	{
 		for (int j = 0; j < InColCount2; ++j)
 		{
-			cout << "| ";
-
 			int Buffer = 0;
 			int CurrentCol2 = 0;
 			
@@ -106,78 +115,191 @@ int** Solve(int**& InMatrix1, int**& InMatrix2, int InRowCount1, int InColCount1
 			}
 			
 			Result[i][j] = Buffer;
-			
-			cout << Result[i][j] << " ";
 		}
-		cout << "|" << endl;
-	}
-	cout << endl;
+	}*/
 
-	return Result;
+	// Столбцы второй матрицы
+	for (int k = 0; k < M2; ++k)
+	{
+		// Строки первой матрицы
+		for (int i = 0; i < N1; ++i)
+		{
+			// Столбцы первой матрицы
+			for (int j = 0; j < M1; ++j)
+			{
+				Result[i][k] += Matrix1[i][j] * Matrix2[j][k];
+			}
+		}
+	}
 }
 
 int main()
 {
+	int Rank = 0;
+	int ProcessCount = 0;
+	int SlaveProcessCount = 0;
+
+	MPI_Status Status;
+
+	double StartTime = 0.0;
+	double EndTime = 0.0;
+	double TotalTime = 0.0;
+
+	int SlaveRowCount = 0;
+	int SlaveMatrixSubset = 0;
+
+	// Запускаем MPI
+	MPI_Init(NULL, NULL);
+
+	// Читаем инфу о процессах
+	MPI_Comm_rank(MPI_COMM_WORLD, &Rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &ProcessCount);
+
+	SlaveProcessCount = ProcessCount - 1;
+
+	// Главный процесс
+	if (Rank == 0)
 	{
-		MPI_Init(NULL, NULL);
+		srand(static_cast<unsigned int>(time(NULL)));
 
-		int Rank = 0;
-		int Size = 0;
+		// Начало отсчета времени
+		StartTime = MPI_Wtime();
 
-		MPI_Comm_rank(MPI_COMM_WORLD, &Rank);
-		MPI_Comm_size(MPI_COMM_WORLD, &Size);
+		// FillMatrices();
 
-		printf("Rank: %d Size: %d\n\n", Rank, Size);
-
-		int RowCount1 = 2;
-		int ColCount1 = 3;
-
-		int** Matrix1 = InitMatrix(RowCount1, ColCount1);
-		// FillMatrix(Matrix1, RowCount, ColCount);
-
+		// Matrix 1
 		Matrix1[0][0] = 1;
-		Matrix1[0][1] = 2;
-		Matrix1[0][2] = 2;
-		Matrix1[1][0] = 3;
-		Matrix1[1][1] = 1;
+		Matrix1[0][1] = 3;
+		Matrix1[0][2] = 5;
+		Matrix1[0][3] = 4;
+		Matrix1[1][0] = 4;
+		Matrix1[1][1] = 2;
 		Matrix1[1][2] = 1;
+		Matrix1[1][3] = 7;
+		Matrix1[2][0] = 9;
+		Matrix1[2][1] = 8;
+		Matrix1[2][2] = 6;
+		Matrix1[2][3] = 1;
 
-		cout << "Matrix 1:" << endl;
-		PrintMatrix(Matrix1, RowCount1, ColCount1);
-
-		int RowCount2 = 3;
-		int ColCount2 = 2;
-
-		int** Matrix2 = InitMatrix(RowCount2, ColCount2);
-		// FillMatrix(Matrix2, RowCount, ColCount);
-		
-		Matrix2[0][0] = 4;
-		Matrix2[0][1] = 2;
-		Matrix2[1][0] = 3;
-		Matrix2[1][1] = 1;
-		Matrix2[2][0] = 1;
-		Matrix2[2][1] = 5;
-		
-		cout << "Matrix2:" << endl;
-		PrintMatrix(Matrix2, RowCount2, ColCount2);
+		// Matrix 2
+		Matrix2[0][0] = 2;
+		Matrix2[0][1] = 3;
+		Matrix2[0][2] = 5;
+		Matrix2[1][0] = 6;
+		Matrix2[1][1] = 9;
+		Matrix2[1][2] = 7;
+		Matrix2[2][0] = 2;
+		Matrix2[2][1] = 3;
+		Matrix2[2][2] = 7;
+		Matrix2[3][0] = 7;
+		Matrix2[3][1] = 9;
+		Matrix2[3][2] = 1;
 
 		// Expected result:
-		// | 12 | 14 |
-		// | 16 | 12 |
+		// | 58 | 81 | 65 |
+		// | 71 | 96 | 48 |
+		// | 85 | 126| 144|
 
-		int** Result = Solve(Matrix1, Matrix2, RowCount1, ColCount1, RowCount2, ColCount2);
+		// При запуске на одном процессе
+		if (ProcessCount == 1)
+		{
+			StartTime = MPI_Wtime();
+			
+			SingleProcessMult();
+			
+			EndTime = MPI_Wtime();
+			TotalTime = EndTime - TotalTime;
+			
+			cout << "SINGLE PROCESS MODE" << endl;
+			PrintMatrices();
+			cout << "Total time: " << TotalTime << endl;
+			
+			return 0;
+		}
 
-		cout << "Result:" << endl;
-		PrintMatrix(Result, RowCount1, ColCount2);
+		// Фрагмент первой матрицы для каждого рабочего процесса
+		SlaveMatrixSubset = 0;
 
-		DeleteMatrix(Matrix1, RowCount1);
-		DeleteMatrix(Matrix2, RowCount2);
-		DeleteMatrix(Result, RowCount1);
+		// Количество строк для каждого рабочего процесса
+		SlaveRowCount = N1 / SlaveProcessCount;
 
-		MPI_Finalize();
+		// Раздача тасков
+		for (int i = 1; i <= SlaveProcessCount; ++i)
+		{
+			// Отправить фрагмент матрицы
+			MPI_Send(&SlaveMatrixSubset, 1, MPI_INT, i, TAG_SEND, MPI_COMM_WORLD);
+
+			// Отправить количество строк
+			MPI_Send(&SlaveRowCount, 1, MPI_INT, i, TAG_SEND, MPI_COMM_WORLD);
+
+			// Отправить фрагмент первой матрицы
+			MPI_Send(&Matrix1[SlaveMatrixSubset][0], SlaveRowCount * M1, MPI_INT, i, TAG_SEND, MPI_COMM_WORLD);
+
+			// Отправить вторую матрицу
+			MPI_Send(&Matrix2, N2 * M2, MPI_INT, i, TAG_SEND, MPI_COMM_WORLD);
+
+			SlaveMatrixSubset += SlaveRowCount;
+		}
+
+		// Разбор полетов
+		for (int i = 1; i <= SlaveProcessCount; ++i)
+		{
+			MPI_Recv(&SlaveMatrixSubset, 1, MPI_INT, i, TAG_RECEIVE, MPI_COMM_WORLD, &Status);
+
+			MPI_Recv(&SlaveRowCount, 1, MPI_INT, i, TAG_RECEIVE, MPI_COMM_WORLD, &Status);
+
+			MPI_Recv(&Result[SlaveMatrixSubset][0], SlaveRowCount * M2, MPI_INT, i, TAG_RECEIVE, MPI_COMM_WORLD, &Status);
+		}
+
+		EndTime = MPI_Wtime();
+		TotalTime = EndTime - StartTime;
+
+		cout << "MPI MODE USING" << ProcessCount << "PROCESSES" << endl;
+		PrintMatrices();
+		cout << "Total time: " << TotalTime << endl;
 	}
 
-	_CrtDumpMemoryLeaks();
+	// Рабочие процессы
+	if (Rank > 0)
+	{
+		// Получить фрагмент матрицы
+		MPI_Recv(&SlaveMatrixSubset, 1, MPI_INT, 0, TAG_SEND, MPI_COMM_WORLD, &Status);
+		// cout << "Received offset: " << SlaveMatrixSubset << endl;
+
+		// Получить строки
+		MPI_Recv(&SlaveRowCount, 1, MPI_INT, 0, TAG_SEND, MPI_COMM_WORLD, &Status);
+		// cout << "Received slave row count: " << SlaveRowCount << endl;
+
+		// Получить исходную матрицу
+		MPI_Recv(&Matrix1, SlaveRowCount * M1, MPI_INT, 0, TAG_SEND, MPI_COMM_WORLD, &Status);
+
+		// Получить вторую матрицу
+		MPI_Recv(&Matrix2, N2 * M2, MPI_INT, 0, TAG_SEND, MPI_COMM_WORLD, &Status);
+
+		// Расчеты
+		for (int k = 0; k < M2; ++k)
+		{
+			for (int i = 0; i < SlaveRowCount; ++i)
+			{
+				for (int j = 0; j < M1; ++j)
+				{
+					Result[i][k] += Matrix1[i][j] * Matrix2[j][k];
+				}
+			}
+		}
+
+		// Отправить оффсет
+		MPI_Send(&SlaveMatrixSubset, 1, MPI_INT, 0, TAG_RECEIVE, MPI_COMM_WORLD);
+
+		// Отправить строки
+		MPI_Send(&SlaveRowCount, 1, MPI_INT, 0, TAG_RECEIVE, MPI_COMM_WORLD);
+
+		// Отправить результат
+		MPI_Send(&Result, SlaveRowCount * M2, MPI_INT, 0, TAG_RECEIVE, MPI_COMM_WORLD);
+	}
+
+	// По домам
+	MPI_Finalize();
 
 	return 0;
 }
